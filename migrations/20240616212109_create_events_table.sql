@@ -1,0 +1,8 @@
+CREATE TABLE events
+(
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    private BOOLEAN NOT NULL DEFAULT FALSE,
+    super_event_id BIGINT REFERENCES events(id) ON DELETE CASCADE
+);
