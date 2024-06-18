@@ -1,10 +1,12 @@
 use std::time::Duration;
 use axum::{
-    routing::get,
+    routing::{get, put},
     Router
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
+
+mod handlers;
 
 #[tokio::main]
 async fn main()
@@ -22,7 +24,17 @@ async fn main()
         .expect("can't connect to database");
 
     let app = Router::new()
-        .route("/health-check", get(health_check))
+        .route("/health-check",
+            get(health_check)
+        )
+        .route("/users",
+            get(handlers::user::list_users)
+            .post(handlers::user::create_user)
+        )
+        .route("/users/:id",
+            put(handlers::user::update_user)
+            .delete(handlers::user::delete_user)
+        )
         .with_state(db_pool);
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", app_port)).await.unwrap();
