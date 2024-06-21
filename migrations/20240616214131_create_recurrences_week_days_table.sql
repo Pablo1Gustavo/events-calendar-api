@@ -2,7 +2,7 @@ CREATE TYPE week_day AS ENUM ('monday', 'tuesday', 'wednesday', 'thursday', 'fri
 
 CREATE TABLE recurrences_week_days
 (
-    recurrence_id BIGINT NOT NULL REFERENCES recurrences(schedule_id) ON DELETE CASCADE,
+    recurrence_id BIGINT NOT NULL REFERENCES recurrences(id) ON DELETE CASCADE,
     week_day week_day NOT NULL,
     PRIMARY KEY (recurrence_id, week_day)
 );
