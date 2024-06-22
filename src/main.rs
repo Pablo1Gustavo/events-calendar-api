@@ -35,6 +35,14 @@ async fn main()
             put(handlers::user::update_user)
             .delete(handlers::user::delete_user)
         )
+        .route("/tags",
+            get(handlers::tag::list_tags)
+            .post(handlers::tag::create_tag)
+        )
+        .route("/tags/:id",
+            put(handlers::tag::update_tag)
+            .delete(handlers::tag::delete_tag)
+        )
         .with_state(db_pool);
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", app_port)).await.unwrap();
