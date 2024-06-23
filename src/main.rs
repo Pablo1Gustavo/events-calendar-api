@@ -1,6 +1,6 @@
 use std::time::Duration;
 use axum::{
-    routing::{get, put},
+    routing::{get, put, post},
     Router
 };
 use sqlx::postgres::PgPoolOptions;
@@ -42,6 +42,9 @@ async fn main()
         .route("/tags/:id",
             put(handlers::tag::update_tag)
             .delete(handlers::tag::delete_tag)
+        )
+        .route("/events",
+            post(handlers::event::create_event)
         )
         .with_state(db_pool);
 
