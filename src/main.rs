@@ -1,6 +1,6 @@
 use std::time::Duration;
 use axum::{
-    routing::{get, put, post},
+    routing::{get, put, post, delete},
     Router
 };
 use sqlx::postgres::PgPoolOptions;
@@ -9,8 +9,7 @@ use tokio::net::TcpListener;
 mod handlers;
 
 #[tokio::main]
-async fn main()
-{
+async fn main() {
     dotenv::dotenv().ok();
 
     let app_port = std::env::var("APP_PORT").unwrap_or("3000".to_owned());
@@ -24,9 +23,7 @@ async fn main()
         .expect("can't connect to database");
 
     let app = Router::new()
-        .route("/health-check",
-            get(health_check)
-        )
+        .route("/health-check", get(health_check))
         .route("/users",
             get(handlers::user::list_users)
             .post(handlers::user::create_user)
@@ -46,6 +43,15 @@ async fn main()
         .route("/events",
             post(handlers::event::create_event)
         )
+        .route("/contacts", 
+            post(handlers::contact::create_contact)
+        )
+        .route("/contacts/:id", 
+            delete(handlers::contact::delete_contact)
+        )
+        .route("/users/:user_id/contacts", 
+            get(handlers::contact::list_contacts)
+        )
         .with_state(db_pool);
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", app_port)).await.unwrap();
@@ -55,7 +61,6 @@ async fn main()
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn health_check() -> &'static str
-{
+async fn health_check() -> &'static str {
     "I'm alive!"
 }
