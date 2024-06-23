@@ -1,12 +1,13 @@
 use std::time::Duration;
 use axum::{
-    routing::{get, put, post},
+    routing::{get, put, post, delete},
     Router
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 
 mod handlers;
+mod helpers;
 
 #[tokio::main]
 async fn main()
@@ -45,6 +46,18 @@ async fn main()
         )
         .route("/events",
             post(handlers::event::create_event)
+        )
+        .route("/schedules/:id",
+            delete(handlers::event::delete_schedule)
+        )
+        .route("/schedules/event/:id",
+            get(handlers::event::list_event_schedules)
+        )
+        .route("/schedules/user/:id",
+            get(handlers::event::list_user_schedules)
+        )
+        .route("/recurrences/:id",
+            delete(handlers::event::delete_recurrence)
         )
         .with_state(db_pool);
 
