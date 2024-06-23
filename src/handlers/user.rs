@@ -2,6 +2,7 @@ use axum::{extract::{Path, State}, http::StatusCode, Json,};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use serde_json::{json, Value};
+use crate::helpers::error::database_err_mapper;
 
 #[derive(Debug, FromRow, Serialize)]
 pub struct User
@@ -15,16 +16,11 @@ pub async fn list_users(
     State(db_pool): State<PgPool>,
 ) -> Result<(StatusCode, Json<Vec<User>>), (StatusCode, Json<Value>)>
 {
-    let users = sqlx::query_as::<_, User>("SELECT * FROM users")
+    let users = sqlx::query_as::<_, User>
+        ("SELECT * FROM users")
         .fetch_all(&db_pool)
         .await
-        .map_err(|e| (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "status": "error",
-                "message": e.to_string()
-            })),
-        ))?;
+        .map_err(database_err_mapper)?;
 
     Ok((StatusCode::OK, Json(users)))
 }
@@ -48,13 +44,7 @@ pub async fn create_user(
     )
     .fetch_one(&db_pool)
     .await
-    .map_err(|e| (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({
-            "status": "error",
-            "message": e.to_string()
-        })),
-    ))?;
+    .map_err(database_err_mapper)?;
 
     Ok((
         StatusCode::CREATED,
@@ -79,13 +69,7 @@ pub async fn update_user(
     )
     .execute(&db_pool)
     .await
-    .map_err(|e| (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({
-            "status": "error",
-            "message": e.to_string()
-        })),
-    ))?;
+    .map_err(database_err_mapper)?;
 
     match result.rows_affected()
     {
@@ -95,10 +79,7 @@ pub async fn update_user(
         )),
         _ => Ok((
             StatusCode::OK,
-            Json(json!({
-                "status": "success",
-                "message": "User updated successfully.",
-            })),
+            Json(json!({"message": "User updated successfully.",})),
         )),
     }
 }
@@ -112,13 +93,7 @@ pub async fn delete_user(
     let result = sqlx::query!("DELETE FROM users WHERE id = $1", id)
         .execute(&db_pool)
         .await
-        .map_err(|e| (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "status": "error",
-                "message": e.to_string()
-            })),
-        ))?;
+        .map_err(database_err_mapper)?;
 
     match result.rows_affected()
     {
@@ -126,12 +101,8 @@ pub async fn delete_user(
             StatusCode::NOT_FOUND,
             Json(json!({"message": "User not found."}))
         )),
-        _ => Ok((
-            StatusCode::OK,
-            Json(json!({
-                "status" : "success",
-                "message": "User deleted successfully.",
-            }))
+        _ => Ok((StatusCode::OK,
+            Json(json!({"message": "User deleted successfully."}))
         ))
     }
 }
