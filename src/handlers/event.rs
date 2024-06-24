@@ -2,8 +2,9 @@ use axum::{extract::{Path, State}, http::StatusCode, Json,};
 use serde::{Deserialize, Serialize};
 use sqlx::{query_builder::QueryBuilder, FromRow, PgPool};
 use serde_json::{json, Value};
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime};
+use chrono::{Datelike, Duration, NaiveDateTime};
 use chronoutil::{shift_months, shift_years};
+use crate::helpers::error::database_err_mapper;
 
 #[derive(Debug, Deserialize, sqlx::Type, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -96,26 +97,27 @@ pub struct CreateEventRequest
     pub configuration: Option<EventConfiguration>,
 }
 
-fn database_err_mapper(e: sqlx::Error) -> (StatusCode, Json<Value>)
+async fn create_recurrence(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    recurrence_type: RecurrenceType,
+    step: i16,
+    repetitions: i16,
+    end_date: NaiveDateTime,
+) -> Result<i64, sqlx::Error>
 {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({"message": e.to_string()})),
+    let recurrence_result = sqlx::query!(
+        "INSERT INTO recurrences (type, step, repetitions, end_date)
+        VALUES ($1, $2, $3, $4) RETURNING id",
+        recurrence_type as RecurrenceType,
+        step,
+        repetitions,
+        end_date
     )
-}
+    .fetch_one(&mut **transaction)
+    .await?;
 
-async fn database_err_mapper_with_transaction(
-    e: sqlx::Error,
-    transaction: sqlx::Transaction<'_, sqlx::Postgres>,
-) -> (StatusCode, Json<Value>)
-{
-    if let Err(e) = transaction.rollback().await
-    {
-        return database_err_mapper(e);
-    };
-    database_err_mapper(e)
+    Ok(recurrence_result.id)
 }
-
 
 pub async fn create_event(
     State(db_pool): State<PgPool>,
@@ -168,19 +170,10 @@ pub async fn create_event(
                 curr_end_time   += Duration::days(final_step as i64);
             }
 
-            let recurrence_result = sqlx::query!(
-                "INSERT INTO recurrences (type, step, repetitions, end_date)
-                VALUES ($1, $2, $3, $4) RETURNING id",
-                RecurrenceType::Daily as RecurrenceType,
-                final_step,
-                final_repetitions,
-                final_end_date
-            )
-            .fetch_one(&mut *transaction)
-            .await
-            .map_err(database_err_mapper)?;
-
-            recurrence_id = Some(recurrence_result.id);
+            recurrence_id = Some(
+                create_recurrence(&mut transaction, RecurrenceType::Daily, final_step, final_repetitions, final_end_date)
+                .await
+                .map_err(database_err_mapper)?);
         },
         Some(EventConfiguration::Weekly { start_time, end_time, step, repetitions, end_date, days_of_week }) =>
         {
@@ -201,24 +194,17 @@ pub async fn create_event(
                 curr_end_time   += Duration::days(1);
             }
 
-            let recurrence_result = sqlx::query!(
-                "INSERT INTO recurrences (type, step, repetitions, end_date)
-                VALUES ($1, $2, $3, $4) RETURNING id",
-                RecurrenceType::Weekly as RecurrenceType,
-                final_step,
-                final_repetitions,
-                final_end_date
-            )
-            .fetch_one(&mut *transaction)
-            .await
-            .map_err(database_err_mapper)?;
+            recurrence_id = Some(
+                create_recurrence(&mut transaction, RecurrenceType::Daily, final_step, final_repetitions, final_end_date)
+                .await
+                .map_err(database_err_mapper)?);
 
             let mut insert_recurrence_week_days_query: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(
                 "INSERT INTO recurrences_week_days (recurrence_id, week_day)");
 
             insert_recurrence_week_days_query.push_values(days_of_week.iter(), |mut b, day_of_week|
             {
-                b.push_bind(recurrence_result.id)
+                b.push_bind(recurrence_id.unwrap())
                 .push_bind(day_of_week);
             });
 
@@ -226,8 +212,6 @@ pub async fn create_event(
                 .execute(&mut *transaction)
                 .await
                 .map_err(database_err_mapper)?;
-
-            recurrence_id = Some(recurrence_result.id);
         },
         Some(EventConfiguration::Monthly { start_time, end_time, step, repetitions, end_date }) =>
         {
@@ -248,19 +232,10 @@ pub async fn create_event(
                 curr_end_time   = shift_months(curr_end_time, final_step as i32);
             }
 
-            let recurrence_result = sqlx::query!(
-                "INSERT INTO recurrences (type, step, repetitions, end_date)
-                VALUES ($1, $2, $3, $4) RETURNING id",
-                RecurrenceType::Monthly as RecurrenceType,
-                final_step,
-                final_repetitions,
-                final_end_date
-            )
-            .fetch_one(&mut *transaction)
-            .await
-            .map_err(database_err_mapper)?;
-
-            recurrence_id = Some(recurrence_result.id);
+            recurrence_id = Some(
+                create_recurrence(&mut transaction, RecurrenceType::Monthly, final_step, final_repetitions, final_end_date)
+                .await
+                .map_err(database_err_mapper)?);
         },
         Some(EventConfiguration::Yearly { start_time, end_time, step, repetitions, end_date }) =>
         {
@@ -281,19 +256,10 @@ pub async fn create_event(
                 curr_end_time   = shift_years(curr_end_time, final_step as i32);
             }
 
-            let recurrence_result = sqlx::query!(
-                "INSERT INTO recurrences (type, step, repetitions, end_date)
-                VALUES ($1, $2, $3, $4) RETURNING id",
-                RecurrenceType::Yearly as RecurrenceType,
-                final_step,
-                final_repetitions,
-                final_end_date
-            )
-            .fetch_one(&mut *transaction)
-            .await
-            .map_err(database_err_mapper)?;
-
-            recurrence_id = Some(recurrence_result.id);
+            recurrence_id = Some(
+                create_recurrence(&mut transaction, RecurrenceType::Yearly, final_step, final_repetitions, final_end_date)
+                .await
+                .map_err(database_err_mapper)?);
         },
         Some(EventConfiguration::Individual { start_time, end_time }) =>
         {
@@ -330,4 +296,95 @@ pub async fn create_event(
             "id"     : event_result.id
         })),
     ))
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct Schedule
+{
+    id           : i64,
+    recurrence_id: Option<i64>,
+    event_id     : i64,
+    start_time   : NaiveDateTime,
+    end_time     : NaiveDateTime,
+}
+
+
+pub async fn list_event_schedules(
+    Path(event_id): Path<i64>,
+    State(db_pool): State<PgPool>,
+) -> Result<(StatusCode, Json<Vec<Schedule>>), (StatusCode, Json<Value>)>
+{
+    let schedules = sqlx::query_as::<_, Schedule>
+        ("SELECT * FROM schedules WHERE event_id = $1
+        ORDER BY start_time")
+        .bind(event_id)
+        .fetch_all(&db_pool)
+        .await
+        .map_err(database_err_mapper)?;
+
+    Ok((StatusCode::OK, Json(schedules)))
+}
+
+pub async fn list_user_schedules(
+    Path(user_id): Path<i64>,
+    State(db_pool): State<PgPool>,
+) -> Result<(StatusCode, Json<Vec<Schedule>>), (StatusCode, Json<Value>)>
+{
+    let schedules = sqlx::query_as::<_, Schedule>
+        ("SELECT id, recurrence_id, event_id, start_time, end_time FROM schedules
+        NATURAL JOIN users_events
+        WHERE user_id = $1
+        ORDER BY start_time")
+        .bind(user_id)
+        .fetch_all(&db_pool)
+        .await
+        .map_err(database_err_mapper)?;
+
+    Ok((StatusCode::OK, Json(schedules)))
+}
+
+pub async fn delete_schedule(
+    Path(id): Path<i64>,
+    State(db_pool): State<PgPool>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let result = sqlx::query!("DELETE FROM schedules WHERE id = $1", id)
+        .execute(&db_pool)
+        .await
+        .map_err(database_err_mapper)?;
+
+    match result.rows_affected()
+    {
+        0 => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "Schedule not found."})),
+        )),
+        _ => Ok((
+            StatusCode::OK,
+            Json(json!({"message": "Schedule deleted successfully."})),
+        )),
+    }
+}
+
+pub async fn delete_recurrence(
+    Path(id): Path<i64>,
+    State(db_pool): State<PgPool>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let result = sqlx::query!("DELETE FROM recurrences WHERE id = $1", id)
+        .execute(&db_pool)
+        .await
+        .map_err(database_err_mapper)?;
+
+    match result.rows_affected()
+    {
+        0 => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "Recurrence not found."})),
+        )),
+        _ => Ok((
+            StatusCode::OK,
+            Json(json!({"message": "Schedules with recurrence deleted successfully."})),
+        )),
+    }
 }
