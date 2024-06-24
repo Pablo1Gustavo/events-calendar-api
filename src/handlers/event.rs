@@ -167,18 +167,17 @@ pub async fn create_event(
     }
 
     let mut schedule_times: Vec<(NaiveDateTime, NaiveDateTime)> = Vec::new();
-    let mut recurrence_id: Option<i64> = None;
 
-    match req.configuration
+    let recurrence_id = match req.configuration
     {
         Some(EventConfiguration::Daily { start_time, end_time, step, repetitions, end_date }) =>
         {
-            let mut curr_start_time = start_time;
-            let mut curr_end_time = end_time;
+            let final_step        = step.unwrap_or(1);
+            let final_repetitions = repetitions.unwrap_or(730);
+            let final_end_date    = end_date.unwrap_or(start_time + Duration::days(final_step as i64 * final_repetitions as i64));
 
-            let final_step = step.unwrap_or(1);
-            let final_end_date    = end_date.unwrap_or(start_time + Duration::days(final_step as i64 * repetitions.unwrap_or(1) as i64));
-            let final_repetitions = ((final_end_date - end_time).num_days() / final_step as i64) as i16;
+            let mut curr_start_time = start_time;
+            let mut curr_end_time   = end_time;
 
             while curr_end_time <= final_end_date
             {
@@ -188,21 +187,20 @@ pub async fn create_event(
                 curr_end_time   += Duration::days(final_step as i64);
             }
 
-            recurrence_id = Some(
-                create_recurrence(&mut transaction, RecurrenceType::Daily, final_step, final_repetitions, final_end_date)
+            Some(create_recurrence(&mut transaction, RecurrenceType::Daily, final_step, final_repetitions, final_end_date)
                 .await
-                .map_err(database_err_mapper)?);
+                .map_err(database_err_mapper)?)
         },
         Some(EventConfiguration::Weekly { start_time, end_time, step, repetitions, end_date, days_of_week }) =>
         {
+            let final_step        = step.unwrap_or(1);
+            let final_repetitions = repetitions.unwrap_or(156) as i16;
+            let final_end_date    = end_date.unwrap_or(start_time + Duration::weeks(final_step as i64 * final_repetitions as i64));
+
             let mut curr_start_time = start_time;
-            let mut curr_end_time   = start_time;
+            let mut curr_end_time   = end_time;
 
-            let final_step = step.unwrap_or(1);
-            let final_end_date    = end_date.unwrap_or(start_time + Duration::weeks(final_step as i64 * repetitions.unwrap_or(1) as i64));
-            let final_repetitions = ((final_end_date - end_time).num_weeks() / final_step as i64) as i16;
-
-            while curr_end_time <= final_end_date
+            while curr_start_time <= final_end_date
             {
                 if days_of_week.contains(&curr_end_time.weekday().into())
                 {
@@ -211,18 +209,17 @@ pub async fn create_event(
                 curr_start_time += Duration::days(1);
                 curr_end_time   += Duration::days(1);
             }
-
-            recurrence_id = Some(
-                create_recurrence(&mut transaction, RecurrenceType::Daily, final_step, final_repetitions, final_end_date)
+            
+            let recurrence_id = create_recurrence(&mut transaction, RecurrenceType::Weekly, final_step, final_repetitions, final_end_date)
                 .await
-                .map_err(database_err_mapper)?);
+                .map_err(database_err_mapper)?;
 
-            let mut insert_recurrence_week_days_query: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(
+            let mut insert_recurrence_week_days_query = QueryBuilder::new(
                 "INSERT INTO recurrences_week_days (recurrence_id, week_day)");
 
             insert_recurrence_week_days_query.push_values(days_of_week.iter(), |mut b, day_of_week|
             {
-                b.push_bind(recurrence_id.unwrap())
+                b.push_bind(recurrence_id)
                 .push_bind(day_of_week);
             });
 
@@ -230,17 +227,17 @@ pub async fn create_event(
                 .execute(&mut *transaction)
                 .await
                 .map_err(database_err_mapper)?;
+
+            Some(recurrence_id)
         },
         Some(EventConfiguration::Monthly { start_time, end_time, step, repetitions, end_date }) =>
         {
+            let final_step        = step.unwrap_or(1);
+            let final_repetitions = repetitions.unwrap_or(60);
+            let final_end_date    = end_date.unwrap_or(shift_months(start_time, final_step as i32 * final_repetitions as i32));
+
             let mut curr_start_time = start_time;
             let mut curr_end_time   = end_time;
-
-            let final_step = step.unwrap_or(1);
-            let final_end_date    = end_date.unwrap_or(shift_months(start_time, final_step as i32 * repetitions.unwrap_or(1) as i32));
-
-            let total_months      = (final_end_date.year() - end_time.year()) * 12 + (final_end_date.month() - end_time.month()) as i32;
-            let final_repetitions = (total_months / final_step as i32) as i16;
 
             while curr_end_time <= final_end_date
             {
@@ -250,21 +247,18 @@ pub async fn create_event(
                 curr_end_time   = shift_months(curr_end_time, final_step as i32);
             }
 
-            recurrence_id = Some(
-                create_recurrence(&mut transaction, RecurrenceType::Monthly, final_step, final_repetitions, final_end_date)
+            Some(create_recurrence(&mut transaction, RecurrenceType::Monthly, final_step, final_repetitions, final_end_date)
                 .await
-                .map_err(database_err_mapper)?);
+                .map_err(database_err_mapper)?)
         },
         Some(EventConfiguration::Yearly { start_time, end_time, step, repetitions, end_date }) =>
         {
+            let final_step        = step.unwrap_or(1);
+            let final_repetitions = repetitions.unwrap_or(10);
+            let final_end_date    = end_date.unwrap_or(shift_years(start_time, final_step as i32 * final_repetitions as i32));
+
             let mut curr_start_time = start_time;
             let mut curr_end_time   = end_time;
-
-            let final_step = step.unwrap_or(1);
-            let final_end_date    = end_date.unwrap_or(shift_years(start_time, final_step as i32 * repetitions.unwrap_or(1) as i32));
-
-            let total_years       = final_end_date.year() - end_time.year();
-            let final_repetitions = (total_years / final_step as i32) as i16;
 
             while curr_end_time <= final_end_date
             {
@@ -274,21 +268,21 @@ pub async fn create_event(
                 curr_end_time   = shift_years(curr_end_time, final_step as i32);
             }
 
-            recurrence_id = Some(
-                create_recurrence(&mut transaction, RecurrenceType::Yearly, final_step, final_repetitions, final_end_date)
+            Some(create_recurrence(&mut transaction, RecurrenceType::Yearly, final_step, final_repetitions, final_end_date)
                 .await
-                .map_err(database_err_mapper)?);
+                .map_err(database_err_mapper)?)
         },
         Some(EventConfiguration::Individual { start_time, end_time }) =>
         {
             schedule_times.push((start_time, end_time));
+            None
         },
-        None => {}
-    }
+        None => None
+    };
 
     if !schedule_times.is_empty()
     {
-        let mut insert_schedules_query: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(
+        let mut insert_schedules_query = QueryBuilder::new(
             "INSERT INTO schedules (event_id, recurrence_id, start_time, end_time)");
     
         insert_schedules_query.push_values(schedule_times.iter(), |mut b, (start_time, end_time)|

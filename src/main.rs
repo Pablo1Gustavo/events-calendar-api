@@ -52,6 +52,7 @@ async fn main() {
         )
         .route("/users/:user_id/contacts", 
             get(handlers::contact::list_contacts)
+        )
         .route("/schedules/:id",
             delete(handlers::event::delete_schedule)
         )
