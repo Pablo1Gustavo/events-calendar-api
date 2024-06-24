@@ -379,8 +379,8 @@ pub async fn delete_schedule(
 }
 
 pub async fn delete_recurrence(
-    Path(id): Path<i64>,
     State(db_pool): State<PgPool>,
+    Path(id): Path<i64>
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
 {
     let result = sqlx::query!("DELETE FROM recurrences WHERE id = $1", id)
@@ -397,6 +397,71 @@ pub async fn delete_recurrence(
         _ => Ok((
             StatusCode::OK,
             Json(json!({"message": "Schedules with recurrence deleted successfully."})),
+        )),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AddUserToEventRequest
+{
+    confirmation: Option<bool>,
+    owner       : Option<bool>,
+}
+
+pub async fn add_user_to_event(
+    State(db_pool): State<PgPool>,
+    Path((event_id, user_id)): Path<(i64, i64)>,
+    Json(req): Json<AddUserToEventRequest>
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let result = sqlx::query!(
+        "INSERT INTO users_events (user_id, event_id, confirmation, owner)
+        VALUES ($1, $2, $3, $4)",
+        user_id,
+        event_id,
+        req.confirmation.unwrap_or(false),
+        req.owner.unwrap_or(false)
+    )
+    .execute(&db_pool)
+    .await
+    .map_err(database_err_mapper)?;
+
+    match result.rows_affected()
+    {
+        0 => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "User or event not found."})),
+        )),
+        _ => Ok((
+            StatusCode::OK,
+            Json(json!({"message": "User added to event successfully."})),
+        )),
+    }
+}
+
+pub async fn delete_user_from_event(
+    State(db_pool): State<PgPool>,
+    Path((event_id, user_id)): Path<(i64, i64)>
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let result = sqlx::query!(
+        "DELETE FROM users_events WHERE user_id = $1 AND event_id = $2",
+        user_id,
+        event_id
+    )
+    .execute(&db_pool)
+    .await
+    .map_err(database_err_mapper)?;
+
+    match result.rows_affected()
+    {
+        0 => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "User or event not found."})),
+        )),
+        _ => Ok((
+            StatusCode::OK,
+            Json(json!({"message": "User deleted from event successfully."})),
         )),
     }
 }
