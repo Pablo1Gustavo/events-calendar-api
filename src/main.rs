@@ -76,6 +76,7 @@ async fn main() {
         .route("/recurrences/:id",
             delete(handlers::event::delete_recurrence)
         )
+        .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(db_pool);
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", app_port)).await.unwrap();
