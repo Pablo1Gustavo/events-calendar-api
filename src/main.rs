@@ -48,6 +48,13 @@ async fn main() {
             post(handlers::event::add_user_to_event)
             .delete(handlers::event::delete_user_from_event)
         )
+        .route("/events/:id/commnents",
+            post(handlers::event::add_comment_to_event)
+        )
+        .route("/comments/:id",
+            put(handlers::event::update_comment)
+            .delete(handlers::event::delete_comment)
+        ) 
         .route("/contacts", 
             post(handlers::contact::create_contact)
         )

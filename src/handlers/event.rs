@@ -465,3 +465,106 @@ pub async fn delete_user_from_event(
         )),
     }
 }
+
+#[derive(Deserialize)]
+pub struct AddCommentToEventRequest
+{
+    pub user_id: i64,
+    pub title  : String,
+    pub content: String,
+}
+
+pub async fn add_comment_to_event(
+    State(db_pool): State<PgPool>,
+    Path(id): Path<i64>,
+    Json(req): Json<AddCommentToEventRequest>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let comment_result = sqlx::query!(
+        "INSERT INTO events_comments (event_id, user_id, title, content)
+        VALUES ($1, $2, $3, $4) RETURNING id",
+        id,
+        req.user_id,
+        req.title,
+        req.content
+    )
+    .fetch_optional(&db_pool)
+    .await
+    .map_err(database_err_mapper)?;
+
+    match comment_result
+    {
+        None => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "Event not found."})),
+        )),
+        Some(comment) => Ok((
+            StatusCode::OK,
+            Json(json!({
+                "message": "Comment added to event successfully.",
+                "id": comment.id
+            })),
+        )),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateCommentRequest
+{
+    pub title  : String,
+    pub content: String,
+}
+
+pub async fn update_comment(
+    State(db_pool): State<PgPool>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateCommentRequest>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let result = sqlx::query!(
+        "UPDATE events_comments SET title = $1, content = $2
+        WHERE id = $3",
+        req.title,
+        req.content,
+        id
+    )
+    .execute(&db_pool)
+    .await
+    .map_err(database_err_mapper)?;
+
+    match result.rows_affected()
+    {
+        0 => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "Comment not found."})),
+        )),
+        _ => Ok((
+            StatusCode::OK,
+            Json(json!({"message": "Comment updated successfully."})),
+        )),
+    }
+}
+
+pub async fn delete_comment(
+    State(db_pool): State<PgPool>,
+    Path(id): Path<i64>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)>
+{
+    let result = sqlx::query!
+        ("DELETE FROM events_comments WHERE id = $1", id)
+        .execute(&db_pool)
+        .await
+        .map_err(database_err_mapper)?;
+
+    match result.rows_affected()
+    {
+        0 => Ok((
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": "Comment not found."})),
+        )),
+        _ => Ok((
+            StatusCode::OK,
+            Json(json!({"message": "Comment deleted successfully."})),
+        )),
+    }
+}
