@@ -1,6 +1,8 @@
-CREATE TYPE recurrence_type AS ENUM ('daily', 'weekly', 'monthly', 'yearly');
+CREATE TYPE recurrence_type AS ENUM (
+    'daily', 'weekly', 'monthly', 'yearly'
+);
 
-CREATE TABLE recurrences
+CREATE TABLE IF NOT EXISTS recurrences
 (
     id BIGSERIAL PRIMARY KEY,
     type recurrence_type NOT NULL,

@@ -1,6 +1,8 @@
-CREATE TYPE contact_type AS ENUM ('email', 'phone');
+CREATE TYPE contact_type AS ENUM (
+    'email', 'phone'
+);
 
-CREATE TABLE users_contacts
+CREATE TABLE IF NOT EXISTS users_contacts
 (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

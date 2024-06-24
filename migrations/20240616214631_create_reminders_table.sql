@@ -1,6 +1,8 @@
-CREATE TYPE reminder_type AS ENUM ('email', 'sms', 'whatsapp', 'telegram', 'notification');
+CREATE TYPE reminder_type AS ENUM (
+    'email', 'sms', 'whatsapp', 'telegram', 'notification'
+);
 
-CREATE TABLE reminders
+CREATE TABLE IF NOT EXISTS reminders
 (
     id BIGSERIAL PRIMARY KEY,
     user_contact_id BIGINT NOT NULL REFERENCES users_contacts(id) ON DELETE CASCADE,

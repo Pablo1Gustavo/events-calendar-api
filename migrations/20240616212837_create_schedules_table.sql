@@ -1,4 +1,4 @@
-CREATE TABLE schedules
+CREATE TABLE IF NOT EXISTS schedules
 (
     id BIGSERIAL PRIMARY KEY,
     recurrence_id BIGINT REFERENCES recurrences(id) ON DELETE CASCADE,

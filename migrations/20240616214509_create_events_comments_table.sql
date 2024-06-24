@@ -1,4 +1,4 @@
-CREATE TABLE events_comments
+CREATE TABLE IF NOT EXISTS events_comments
 (
     id BIGSERIAL PRIMARY KEY,
     event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,

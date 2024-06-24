@@ -1,4 +1,4 @@
-CREATE TABLE users_events
+CREATE TABLE IF NOT EXISTS users_events
 (
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,

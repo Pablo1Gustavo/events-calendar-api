@@ -1,6 +1,8 @@
-CREATE TYPE week_day AS ENUM ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday');
+CREATE TYPE week_day AS ENUM (
+    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+);
 
-CREATE TABLE recurrences_week_days
+CREATE TABLE IF NOT EXISTS recurrences_week_days
 (
     recurrence_id BIGINT NOT NULL REFERENCES recurrences(id) ON DELETE CASCADE,
     week_day week_day NOT NULL,
