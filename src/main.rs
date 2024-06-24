@@ -61,6 +61,13 @@ async fn main() {
         .route("/contacts/:id", 
             delete(handlers::contact::delete_contact)
         )
+        .route("/contacts/:contact_id/event/:event_id",
+            post(handlers::user::add_reminder)
+            .delete(handlers::user::remove_reminder)
+        )
+        .route("/users/:user_id/reminders",
+            get(handlers::user::list_reminders_from_user)
+        )
         .route("/users/:user_id/contacts", 
             get(handlers::contact::list_contacts)
         )

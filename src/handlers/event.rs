@@ -1,6 +1,6 @@
 use axum::{extract::{Path, State}, http::StatusCode, Json,};
 use serde::{Deserialize, Serialize};
-use sqlx::{query_builder::QueryBuilder, FromRow, PgPool};
+use sqlx::{query_builder::QueryBuilder, FromRow, PgPool, Type};
 use serde_json::{json, Value};
 use chrono::{Datelike, Duration, NaiveDateTime};
 use chronoutil::{shift_months, shift_years};
@@ -319,7 +319,6 @@ pub struct Schedule
     start_time   : NaiveDateTime,
     end_time     : NaiveDateTime,
 }
-
 
 pub async fn list_event_schedules(
     Path(event_id): Path<i64>,
