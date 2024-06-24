@@ -89,12 +89,13 @@ pub enum EventConfiguration
 #[derive(Deserialize)]
 pub struct CreateEventRequest
 {
-    pub name: String,
-    pub description: String,
-    pub private: Option<bool>,
-    pub user_id: i64,
+    pub name          : String,
+    pub description   : String,
+    pub private       : Option<bool>,
+    pub user_id       : i64,
     pub super_event_id: Option<i64>,
-    pub configuration: Option<EventConfiguration>,
+    pub tags          : Option<Vec<i64>>,
+    pub configuration : Option<EventConfiguration>,
 }
 
 async fn create_recurrence(
@@ -147,6 +148,23 @@ pub async fn create_event(
     .execute(&mut *transaction)
     .await
     .map_err(database_err_mapper)?;
+
+    if let Some(tags) = req.tags
+    {
+        let mut insert_event_tags_query = QueryBuilder::new(
+            "INSERT INTO events_tags (event_id, tag_id)");
+    
+        insert_event_tags_query.push_values(tags.iter(), |mut b, tag_id|
+        {
+            b.push_bind(event_result.id)
+            .push_bind(tag_id);
+        });
+
+        insert_event_tags_query.build()
+            .execute(&mut *transaction)
+            .await
+            .map_err(database_err_mapper)?;
+    }
 
     let mut schedule_times: Vec<(NaiveDateTime, NaiveDateTime)> = Vec::new();
     let mut recurrence_id: Option<i64> = None;
